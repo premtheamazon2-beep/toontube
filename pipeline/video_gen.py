@@ -1,18 +1,25 @@
 """
 Generates one short video clip per scene.
 
-Real mode: calls Google's Veo model through the Gemini API (REST, long-running
-operation) and downloads the resulting mp4.
-
-Demo mode (no GEMINI_API_KEY, or the Veo call fails/quota-limited): renders a
-simple animated placeholder clip locally with Pillow + ffmpeg (a colored card
-with the character name and a Ken Burns zoom) so the whole pipeline still
-produces a playable video end to end.
+Four tiers, tried in order (first one with the right key/availability wins):
+1. Veo (needs a paid/billing-enabled GEMINI_API_KEY) — best quality real AI
+   video motion.
+2. Hugging Face Inference Providers text-to-video (needs a free HF_TOKEN —
+   huggingface.co/settings/tokens, no credit card, free-tier credits) — a
+   real (if rougher) AI-animated moving clip per scene.
+3. Free AI illustration — calls Pollinations.ai's free, keyless text-to-image
+   API to get an actual AI-drawn picture of the scene, then animates it with
+   a Ken Burns pan/zoom in ffmpeg. No account, no key, no cost, but the
+   "motion" is just a pan/zoom on a still picture.
+4. Plain placeholder card — solid color + the scene text. Last-resort
+   fallback if everything else is unreachable, so the pipeline always
+   finishes with a playable video.
 """
 import functools
 import os
 import subprocess
 import time
+import urllib.parse
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -26,6 +33,13 @@ VEO_POLL_URL = "https://generativelanguage.googleapis.com/v1beta/{op_name}"
 POLL_INTERVAL_SECONDS = 8
 POLL_TIMEOUT_SECONDS = 300
 
+# Small, fast, free-tier-friendly text-to-video model on Hugging Face's
+# Inference Providers router. Swap for a bigger model if you have more quota.
+HF_T2V_MODEL = "Wan-AI/Wan2.1-T2V-1.3B"
+HF_T2V_PROVIDER = "fal-ai"
+
+POLLINATIONS_URL = "https://image.pollinations.ai/prompt/{prompt}"
+
 PALETTE = [
     (255, 122, 89), (76, 175, 154), (255, 195, 77),
     (100, 149, 237), (186, 104, 200), (255, 138, 182),
@@ -33,21 +47,45 @@ PALETTE = [
 
 
 def generate_scene_clip(scene: dict, api_key: str | None, out_mp4_path: str,
-                         target_seconds: float, log=print) -> str:
+                         target_seconds: float, log=print, hf_token: str | None = None) -> str:
     """
     Produces out_mp4_path (roughly target_seconds long, will be trimmed/looped
-    later to match the narration exactly). Returns 'veo' or 'demo' to record
-    which path was used.
+    later to match the narration exactly). Returns which tier was used:
+    'veo', 'huggingface', 'free-ai-image', or 'placeholder'.
     """
     if api_key:
         try:
             _generate_with_veo(scene["visual_prompt"], api_key, out_mp4_path)
             return "veo"
         except Exception as exc:
-            log(f"  [scene {scene['index']}] Veo generation failed ({exc}); using demo placeholder clip.")
+            log(f"  [scene {scene['index']}] Veo generation failed ({exc}); trying next option.")
+
+    if hf_token:
+        try:
+            _generate_with_huggingface(scene["visual_prompt"], hf_token, out_mp4_path)
+            return "huggingface"
+        except Exception as exc:
+            log(f"  [scene {scene['index']}] Hugging Face video generation failed ({exc}); trying free AI image instead.")
+
+    try:
+        _generate_from_free_image(scene, out_mp4_path, target_seconds)
+        return "free-ai-image"
+    except Exception as exc:
+        log(f"  [scene {scene['index']}] Free AI image generation failed ({exc}); using placeholder card.")
 
     _generate_placeholder(scene, out_mp4_path, target_seconds)
-    return "demo"
+    return "placeholder"
+
+
+def _generate_with_huggingface(prompt: str, hf_token: str, out_mp4_path: str):
+    """Real (if short/rough) AI video motion using Hugging Face's free-tier
+    Inference Providers router — no billing setup needed, just a free token."""
+    from huggingface_hub import InferenceClient
+
+    client = InferenceClient(provider=HF_T2V_PROVIDER, api_key=hf_token)
+    video_bytes = client.text_to_video(prompt, model=HF_T2V_MODEL)
+    with open(out_mp4_path, "wb") as f:
+        f.write(video_bytes)
 
 
 def _generate_with_veo(prompt: str, api_key: str, out_mp4_path: str):
@@ -90,8 +128,47 @@ def _generate_with_veo(prompt: str, api_key: str, out_mp4_path: str):
     raise TimeoutError("Veo generation did not finish in time")
 
 
+CARTOON_STYLE_SUFFIX = (
+    "Flat 2D cartoon character design, thick clean black outlines, simple "
+    "rounded shapes, bright solid flat colors with minimal shading, "
+    "Japanese-anime-inspired children's TV show art style, plain simple "
+    "background, single character centered in frame, vector illustration "
+    "look, no text, no watermark, no photorealism, no 3D render."
+)
+
+
+def _generate_from_free_image(scene: dict, out_mp4_path: str, target_seconds: float):
+    """Free, keyless: get an AI-illustrated picture for this scene from
+    Pollinations.ai and animate it with a Ken Burns pan/zoom."""
+    prompt = scene.get("visual_prompt") or scene.get("narration_en") or scene.get("narration_ta") or "a cheerful cartoon scene"
+    # Belt-and-suspenders: force the flat-cartoon look even if the prompt
+    # came from an older job / naive split that didn't include it.
+    if "flat 2d cartoon" not in prompt.lower():
+        prompt = f"{prompt} {CARTOON_STYLE_SUFFIX}"
+    encoded = urllib.parse.quote(prompt[:600])
+    url = POLLINATIONS_URL.format(prompt=encoded)
+    seed = abs(hash(prompt)) % 100000
+
+    resp = requests.get(
+        url,
+        params={"width": 1280, "height": 720, "nologo": "true", "seed": seed, "quality": "high"},
+        timeout=60,
+    )
+    resp.raise_for_status()
+    if not resp.headers.get("content-type", "").startswith("image"):
+        raise ValueError("free image service did not return an image")
+
+    tmp_dir = os.path.dirname(out_mp4_path)
+    still_path = os.path.join(tmp_dir, f"_ai_still_{scene['index']}.jpg")
+    with open(still_path, "wb") as f:
+        f.write(resp.content)
+
+    _ken_burns_from_still(still_path, out_mp4_path, target_seconds)
+    os.remove(still_path)
+
+
 def _generate_placeholder(scene: dict, out_mp4_path: str, target_seconds: float):
-    """Renders a colorful animated 'coming to life' placeholder card as the clip."""
+    """Last-resort fallback: a colorful card with the scene text on it."""
     width, height = 1280, 720
     color = PALETTE[scene["index"] % len(PALETTE)]
     img = Image.new("RGB", (width, height), color)
@@ -108,22 +185,27 @@ def _generate_placeholder(scene: dict, out_mp4_path: str, target_seconds: float)
     still_path = os.path.join(tmp_dir, f"_still_{scene['index']}.png")
     img.save(still_path)
 
+    _ken_burns_from_still(still_path, out_mp4_path, target_seconds)
+    os.remove(still_path)
+
+
+def _ken_burns_from_still(still_path: str, out_mp4_path: str, target_seconds: float):
+    width, height = 1280, 720
     duration = max(2.0, target_seconds)
-    # Ken Burns style slow zoom on the still image
     subprocess.run(
         [
             "ffmpeg", "-y", "-loop", "1", "-i", still_path,
             "-t", str(duration),
             "-vf",
             (
-                f"scale=1600:900,zoompan=z='min(zoom+0.0008,1.15)':"
+                f"scale=1600:900:force_original_aspect_ratio=increase,crop=1600:900,"
+                f"zoompan=z='min(zoom+0.0008,1.15)':"
                 f"d={int(duration * 25)}:s={width}x{height}:fps=25"
             ),
             "-c:v", "libx264", "-pix_fmt", "yuv420p", out_mp4_path,
         ],
         check=True, capture_output=True,
     )
-    os.remove(still_path)
 
 
 @functools.lru_cache(maxsize=8)

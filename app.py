@@ -45,6 +45,7 @@ def generate():
         "character_desc": (data.get("character_desc") or "").strip(),
         "languages": languages,
         "api_key": (data.get("api_key") or "").strip(),
+        "hf_token": (data.get("hf_token") or "").strip(),
     }
 
     t = threading.Thread(target=run_job, args=(job_id, params, jobs, jobs_lock), daemon=True)

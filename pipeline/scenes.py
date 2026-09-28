@@ -21,6 +21,16 @@ _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?।॥])\s+|\n+")
 
 TAMIL_RE = re.compile(r"[஀-௿]")
 
+# Pushed hard into every visual prompt so the free image generator draws a
+# flat, simple children's-TV cartoon instead of a realistic/painterly image.
+CARTOON_STYLE_SUFFIX = (
+    "Flat 2D cartoon character design, thick clean black outlines, simple "
+    "rounded shapes, bright solid flat colors with minimal shading, "
+    "Japanese-anime-inspired children's TV show art style, plain simple "
+    "background, single character centered in frame, vector illustration "
+    "look, no text, no watermark, no photorealism, no 3D render."
+)
+
 
 def detect_script(text: str) -> str:
     """Returns 'ta' if the text looks like Tamil script, else 'en'."""
@@ -60,7 +70,10 @@ def plan_scenes(content: str, character_name: str, character_desc: str,
             pass  # fall through to naive split on any API problem
 
     chunks = _naive_split(content, max_scenes)
-    style = f"{character_name}: {character_desc}. Children's cartoon animation style, colorful, safe for kids."
+    style = (
+        f"{character_name}: {character_desc}. "
+        f"{CARTOON_STYLE_SUFFIX}"
+    )
     scenes = []
     for i, chunk in enumerate(chunks):
         scenes.append({
@@ -82,9 +95,9 @@ The main character is: {character_name} — {character_desc}
 For EACH scene return:
 - "narration_ta": the scene's narration in Tamil (translate to Tamil if the source is not Tamil)
 - "narration_en": the same narration in English (translate to English if the source is not English)
-- "visual_prompt": a vivid ENGLISH visual description for an AI video generator, describing the setting
-  and action of this scene featuring {character_name} ({character_desc}). Always mention
-  "children's cartoon animation style, colorful, 3D animated, no on-screen text" in the prompt.
+- "visual_prompt": a vivid ENGLISH visual description for an AI image/video generator, describing the
+  setting and action of this scene featuring {character_name} ({character_desc}). ALWAYS end the
+  prompt with this exact style phrase: "{CARTOON_STYLE_SUFFIX}"
   Never reference any existing copyrighted character, show, or brand.
 
 Respond ONLY with valid minified JSON: a list of objects with keys

@@ -19,18 +19,24 @@ to whatever original character you like.
 4. Burns in matching subtitles.
 5. Stitches everything into one MP4 per language, downloadable from the browser.
 
-## Two modes
+## Modes
 
-- **Demo Mode** (no API key): works immediately, no cost. Video clips are
-  animated placeholder cards (Ken Burns zoom + scene text) — good for
-  testing the whole pipeline and getting real Tamil/English voiceover +
-  subtitles, but not real AI-drawn animation.
-- **Real AI video clips**: add a **Gemini API key** (from
-  [Google AI Studio](https://aistudio.google.com/apikey)) in the form. The
-  app calls Google's **Veo** model to generate an actual animated clip per
-  scene, and also uses Gemini to turn your story into clean scenes and
-  translate between Tamil/English. Veo video generation is a **paid** API —
-  check current pricing in Google AI Studio before generating a full video.
+- **Free mode (default, no API key needed):** each scene gets an actual
+  AI-illustrated picture from [Pollinations.ai](https://pollinations.ai)
+  (free, keyless) of your character/scene, animated with a Ken Burns
+  pan/zoom, with real Tamil/English voiceover (`gTTS`, free) and burned-in
+  subtitles. No signup, no billing, no cost. This is what you get by
+  default — just leave the API key field empty.
+- **Placeholder fallback:** if the free image service is briefly
+  unreachable, a scene falls back to a plain colored card with the scene
+  text instead of a picture — narration/subtitles are unaffected. Usually
+  transient; just try again.
+- **Real AI video clips (optional, paid):** add a **Gemini API key** (from
+  [Google AI Studio](https://aistudio.google.com/apikey)) in the form to use
+  Google's **Veo** model instead, which generates actual moving video per
+  scene (not just an animated still) and also lets Gemini write cleaner
+  scenes and translate between Tamil/English. Veo requires billing enabled
+  on the key — check current pricing in Google AI Studio before generating.
 
 You can also set the key once as an environment variable instead of typing
 it every time:

@@ -24,6 +24,7 @@ form.addEventListener("submit", async (e) => {
     character_desc: document.getElementById("character_desc").value,
     languages,
     api_key: document.getElementById("api_key").value,
+    hf_token: document.getElementById("hf_token").value,
   };
 
   if (!payload.content.trim()) {
@@ -91,9 +92,13 @@ function showResult(jobId, job) {
     downloads.appendChild(a);
   });
 
-  modeNote.textContent = job.video_mode === "veo"
-    ? "Video clips were generated with Veo AI."
-    : "Demo Mode: animated placeholder clips were used (no/failed Gemini API key). Add a Gemini API key to generate real AI video clips.";
+  const modeMessages = {
+    "veo": "Video clips were generated with Veo AI (real video motion).",
+    "huggingface": "Video clips were generated with a free Hugging Face AI video model (real, if rough, motion) using your free-tier credits.",
+    "free-ai-image": "Free mode: each scene got an AI-illustrated picture (Pollinations.ai) animated with a pan/zoom. No cost, no API key used.",
+    "placeholder": "Plain placeholder cards were used (nothing else was reachable) — narration and subtitles are still real.",
+  };
+  modeNote.textContent = modeMessages[job.video_mode] || "";
 }
 
 function showError(msg) {

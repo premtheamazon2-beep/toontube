@@ -31,6 +31,7 @@ def run_job(job_id: str, params: dict, jobs: dict, jobs_lock):
 
     try:
         api_key = (params.get("api_key") or os.environ.get("GEMINI_API_KEY") or "").strip() or None
+        hf_token = (params.get("hf_token") or os.environ.get("HF_TOKEN") or "").strip() or None
         languages = params["languages"]
         content = params["content"]
         character_name = params.get("character_name") or "Chinna Veeran"
@@ -64,7 +65,7 @@ def run_job(job_id: str, params: dict, jobs: dict, jobs_lock):
             clip_path = os.path.join(job_dir, f"clip_{s['index']}.mp4")
             approx_seconds = max(3.0, len(s["narration_en"]) * 0.09)
             src = video_gen_mod.generate_scene_clip(
-                s, api_key, clip_path, approx_seconds, log=log
+                s, api_key, clip_path, approx_seconds, log=log, hf_token=hf_token
             )
             video_source = src
             clip_paths.append(clip_path)
