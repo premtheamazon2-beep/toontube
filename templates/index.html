@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ToonTube Maker</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🎬 ToonTube Maker</h1>
+      <p class="subtitle">Paste your story. Get an animated kids video with voiceover, ready for YouTube.</p>
+    </header>
+
+    <form id="genForm">
+      <label>Your story / content
+        <textarea id="content" rows="8" placeholder="உங்க கதையை இங்கே தமிழில் எழுதுங்க... (or in English)"></textarea>
+      </label>
+
+      <div class="row">
+        <label>Character name
+          <input id="character_name" type="text" placeholder="e.g. Chinna Veeran" value="Chinna Veeran">
+        </label>
+        <label>Character description (keep it original — no existing cartoons!)
+          <input id="character_desc" type="text" placeholder="e.g. a brave cheerful kid with a red cape"
+                 value="a brave, cheerful little superhero kid with a red cape">
+        </label>
+      </div>
+
+      <label class="langs">Output language(s)
+        <span>
+          <label class="checkbox"><input type="checkbox" value="ta" checked> Tamil</label>
+          <label class="checkbox"><input type="checkbox" value="en"> English</label>
+        </span>
+      </label>
+
+      <label>Gemini API key <span class="hint">(optional — for real AI-generated Veo video clips & translation. Leave blank for free Demo Mode.)</span>
+        <input id="api_key" type="password" placeholder="AIza...">
+      </label>
+
+      <button type="submit" id="genBtn">Generate video</button>
+    </form>
+
+    <div id="progressBox" class="hidden">
+      <h2 id="stageLabel">Working...</h2>
+      <div class="bar"><div class="bar-fill" id="barFill"></div></div>
+      <pre id="logBox"></pre>
+    </div>
+
+    <div id="resultBox" class="hidden">
+      <h2>Your video is ready! 🎉</h2>
+      <div id="downloads"></div>
+      <p class="hint" id="modeNote"></p>
+    </div>
+
+    <div id="errorBox" class="hidden">
+      <h2>Something went wrong</h2>
+      <pre id="errorText"></pre>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

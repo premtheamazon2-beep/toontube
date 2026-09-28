@@ -1,0 +1,5 @@
+Flask>=3.0
+requests>=2.31
+gTTS>=2.5
+Pillow>=10.0
+gunicorn>=21.0
