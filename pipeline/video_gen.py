@@ -138,25 +138,31 @@ CARTOON_STYLE_SUFFIX = (
 
 
 def _get_with_retry(url: str, params: dict, timeout: int, max_attempts: int = 4):
-    """GET with backoff on 429 (Pollinations rate-limits fast back-to-back
-    requests — retrying after a short wait almost always succeeds)."""
+    """GET with backoff on 429 (rate limit) and 5xx (transient server errors) —
+    Pollinations occasionally hiccups on a single request; retrying almost
+    always succeeds."""
     last_exc = None
     for attempt in range(max_attempts):
         try:
             resp = requests.get(url, params=params, timeout=timeout)
-            if resp.status_code == 429:
-                wait = 8 * (attempt + 1)
-                time.sleep(wait)
+            if resp.status_code == 429 or resp.status_code >= 500:
+                last_exc = requests.HTTPError(f"{resp.status_code} error from image service", response=resp)
+                time.sleep(8 * (attempt + 1))
                 continue
             resp.raise_for_status()
             return resp
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            last_exc = exc
+            time.sleep(5 * (attempt + 1))
+            continue
         except requests.HTTPError as exc:
             last_exc = exc
-            if exc.response is not None and exc.response.status_code == 429:
+            code = exc.response.status_code if exc.response is not None else None
+            if code == 429 or (code is not None and code >= 500):
                 time.sleep(8 * (attempt + 1))
                 continue
             raise
-    raise last_exc or RuntimeError("Pollinations request failed after retries (rate-limited)")
+    raise last_exc or RuntimeError("Pollinations request failed after retries")
 
 
 def _generate_from_free_image(scene: dict, out_mp4_path: str, target_seconds: float):
