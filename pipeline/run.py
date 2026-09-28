@@ -1,4 +1,5 @@
 import os
+import time
 import traceback
 
 from . import scenes as scenes_mod
@@ -62,6 +63,8 @@ def run_job(job_id: str, params: dict, jobs: dict, jobs_lock):
         clip_paths = []
         video_source = "demo"
         for s in scene_list:
+            if s["index"] > 0:
+                time.sleep(4)  # be gentle with the free image API's rate limit
             clip_path = os.path.join(job_dir, f"clip_{s['index']}.mp4")
             approx_seconds = max(3.0, len(s["narration_en"]) * 0.09)
             src = video_gen_mod.generate_scene_clip(

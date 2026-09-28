@@ -137,6 +137,28 @@ CARTOON_STYLE_SUFFIX = (
 )
 
 
+def _get_with_retry(url: str, params: dict, timeout: int, max_attempts: int = 4):
+    """GET with backoff on 429 (Pollinations rate-limits fast back-to-back
+    requests — retrying after a short wait almost always succeeds)."""
+    last_exc = None
+    for attempt in range(max_attempts):
+        try:
+            resp = requests.get(url, params=params, timeout=timeout)
+            if resp.status_code == 429:
+                wait = 8 * (attempt + 1)
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            return resp
+        except requests.HTTPError as exc:
+            last_exc = exc
+            if exc.response is not None and exc.response.status_code == 429:
+                time.sleep(8 * (attempt + 1))
+                continue
+            raise
+    raise last_exc or RuntimeError("Pollinations request failed after retries (rate-limited)")
+
+
 def _generate_from_free_image(scene: dict, out_mp4_path: str, target_seconds: float):
     """Free, keyless: get an AI-illustrated picture for this scene from
     Pollinations.ai and animate it with a Ken Burns pan/zoom."""
@@ -149,12 +171,11 @@ def _generate_from_free_image(scene: dict, out_mp4_path: str, target_seconds: fl
     url = POLLINATIONS_URL.format(prompt=encoded)
     seed = abs(hash(prompt)) % 100000
 
-    resp = requests.get(
+    resp = _get_with_retry(
         url,
         params={"width": 1280, "height": 720, "nologo": "true", "seed": seed, "quality": "high"},
         timeout=60,
     )
-    resp.raise_for_status()
     if not resp.headers.get("content-type", "").startswith("image"):
         raise ValueError("free image service did not return an image")
 
